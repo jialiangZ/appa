@@ -3,6 +3,9 @@ defaults:
   - optim: adamw
 
 train:
+  # Global random seed (torch/numpy/random). Identical across DDP ranks;
+  # set to null to disable seeding.
+  seed: 42
   update_steps: 500_000
   # Number of elements that can fit at once on a gpu
   batch_element_per_gpu: 1

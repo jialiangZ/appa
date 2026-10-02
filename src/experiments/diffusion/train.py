@@ -20,6 +20,7 @@ from appa.data.const import DATASET_DATES_TRAINING, DATASET_DATES_VALIDATION
 from appa.data.dataloaders import get_dataloader
 from appa.data.datasets import LatentBlanketDataset
 from appa.diagnostics.plots import plot_image_grid, plot_spheres_grid
+from appa.utils.seeding import seed_everything
 from appa.models.diffusion import DenoiserLoss, create_denoiser, create_schedule
 from appa.utils.grids import create_icosphere, latlon_to_xyz
 from appa.training.optim import get_optimizer, safe_gd_step
@@ -59,6 +60,9 @@ def train(
     dist.init_process_group(backend="nccl")
     rank = dist.get_rank()
     world_size = dist.get_world_size()
+
+    # Reproducibility (identical across ranks; disable with train.seed=null)
+    seed_everything(cfg.train.get("seed", None) or -1)
     num_nodes = ceil(world_size / torch.cuda.device_count())
     num_cpu = len(os.sched_getaffinity(0)) * num_nodes
     device_id = os.environ.get("LOCAL_RANK", rank)
