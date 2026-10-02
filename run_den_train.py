@@ -1,4 +1,4 @@
-r"""Local (no-Slurm) launcher for latent diffusion (denoiser) training.
+r"""Local (no-Slurm) launcher for latent diffusion (denoiser) training (thin wrapper).
 
 Usage:
     CUDA_VISIBLE_DEVICES=3 WANDB_MODE=disabled torchrun \
@@ -12,19 +12,9 @@ Example:
         train.update_steps=2000 train.batch_size_per_step=8
 """
 
-import sys
-import wandb
-
-from appa.config.hydra import compose
-from experiments.diffusion.train import train
+from appa.launchers import den_train
 
 if __name__ == "__main__":
-    cfg = compose(
-        config_file="src/experiments/diffusion/configs/train.yaml",
-        overrides=sys.argv[1:],
-    )
+    import sys
 
-    runid = wandb.util.generate_id()
-    print(f"Starting local denoiser training with runid: {runid}")
-
-    train(runid, cfg, fork_lap=0, lap=0)
+    den_train(sys.argv[1:])

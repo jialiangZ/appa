@@ -22,6 +22,9 @@ dependencies = [
   "zarr==3.1.2",
 ]
 
+[project.scripts]
+appa = "appa.launchers:main"
+
 [project.optional-dependencies]
 all = [
   "cmocean==4.0.3",
