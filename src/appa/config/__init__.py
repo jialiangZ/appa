@@ -26,7 +26,9 @@ DATA_REGISTRY: Dict[Tuple[int, int], Dict[str, Path]] = {
     (240, 121): {
         "era5": PATH_ARTIFACTS / "data" / "era5_2017-1h-240x121-std.zarr",
         "stat": PATH_ARTIFACTS / "data" / "stats_era5_2017-1h-240x121.zarr",
-        "mask": PATH_ARTIFACTS / "data" / "masks_era5_2017-1h-240x121.zarr",
+        # Ground-station masks are only available at native resolution; the
+        # station mask is regridded on the fly where needed.
+        "mask": PATH_ARTIFACTS / "data" / "masks_era5_1993-2021-1h-1440x721.zarr",
     },
     (1440, 721): {
         "era5": PATH_ARTIFACTS / "data" / "era5_2000-1h-1440x721.zarr",

@@ -85,15 +85,19 @@ def generate(argv) -> None:
     # Derive the padded trajectory size the same way generate.py does.
     trajectory_sizes = [int(s) for s in str(cfg.trajectory_sizes).split(",")]
     start_dates = list(cfg.start_dates)
+    num_samples = int(cfg.num_samples_per_date)
+
+    # Replicate dates like the dawgz pipeline does: one job per sample.
+    sample_dates = [date for date in start_dates for _ in range(num_samples)]
 
     for traj_size in trajectory_sizes:
         target_dir = model_path.parent.parent.parent.parent / "prior" / "local" / f"{traj_size}h"
         target_dir.mkdir(parents=True, exist_ok=True)
 
-        print(f"Generating {traj_size}h trajectory -> {target_dir}", flush=True)
+        print(f"Generating {traj_size}h trajectories -> {target_dir}", flush=True)
         all_traj, all_ts = [], []
 
-        for date in start_dates:
+        for date in sample_dates:
             date_str, hour_str = str(date).split()
             generate_prior_trajectory(
                 model_path=model_path,
@@ -122,13 +126,16 @@ def generate(argv) -> None:
                 all_ts.append(ts)
 
         if all_traj:
-            stacked = rearrange(torch.cat(all_traj, 0), "(d s) ... -> d s ...", s=1)
+            stacked = rearrange(torch.cat(all_traj, 0), "(d s) ... -> d s ...", s=num_samples)
             safe_save(stacked, target_dir / "trajectories.pt")
             safe_save(
-                rearrange(torch.cat(all_ts, 0), "(d s) ... -> d s ...", s=1),
+                rearrange(torch.cat(all_ts, 0), "(d s) ... -> d s ...", s=num_samples),
                 target_dir / "timestamps.pt",
             )
-            print(f"Saved to {target_dir}", flush=True)
+            print(
+                f"Saved {stacked.shape[0]} dates x {stacked.shape[1]} samples to {target_dir}",
+                flush=True,
+            )
 
         print("Done.", flush=True)
 
