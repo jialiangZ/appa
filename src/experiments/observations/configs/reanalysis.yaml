@@ -10,7 +10,12 @@ diffusion:
       delta: 0.1
       corrections: 2
 
-assimilation_lengths: "1,2,4,8,16,36,48,72"
+# Physical grid the AE decodes to. Satellite indices are remapped from the
+# native 1440x721 grid; station masks must be pre-resampled accordingly
+# (ground_masks/mask_11k_lr240.pt).
+target_grid: [121, 240]
+
+assimilation_lengths: "1,2,4,8,16"
 
 observed_variables:
   stations:
@@ -36,34 +41,31 @@ masks:
     type: stations
     covariance: 1e-4
     config:
-      num_stations: 11k
+      num_stations: 11k_lr240
       num_valid_stations: 0
 
 # Samples for a given window size
-num_samples_per_date: 10
+num_samples_per_date: 2
 start_dates:
-  - "2021-03-21 0h"
-  - "2021-06-21 0h"
-  - "2021-09-21 0h"
-  - "2021-12-21 0h"
+  - "2017-04-01 0h"
 
 blanket_overlap: 12  # Overlap between blankets
 
 precision: float16  # Options: float32, float16, bfloat16, null = model training precision
 
 hardware:
-  backend: slurm
+  backend: async  # or slurm
   account: users
-  gpus_per_node: 4
+  gpus_per_node: 1
   gen:
     cpus: 8
     ram: 60GB
     time: "4:00:00"
-    partition: ia
-    gpus: 1  # TODO: Support for "auto" mode that computes GPUs based on a number of blankets per GPU for scalable experiments.
+    partition: gpu
+    gpus: 1
   aggregate:
     cpus: 8
-    gpus: 1
+    gpus: 0
     ram: 60GB
     time: "2:00"
     partition: gpu

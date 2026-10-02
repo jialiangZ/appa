@@ -223,6 +223,7 @@ def reanalysis(
     precision,
     target_dir,
     split_seed,
+    target_grid=None,
 ):
     r"""Performs reanalysis over some assimilation window.
 
@@ -331,6 +332,7 @@ def reanalysis(
             delay=0,
             split_seed=split_seed,
             save=target_dir,
+            target_grid=target_grid,
         )
 
     timestamps = create_trajectory_timestamps(
@@ -360,6 +362,7 @@ def reanalysis(
             trajectory_dt=trajectory_dt,
             delay=rank_start_idx,
             split_seed=split_seed,
+            target_grid=target_grid,
         )
 
         stations_variables = (
@@ -529,8 +532,10 @@ def main():
         unique_id = config.pop("id")
     elif config.hardware.backend == "slurm":
         unique_id = wandb.util.generate_id()
-    else:
-        unique_id = os.environ["SLURM_JOB_ID"]  # even in async, should be in slurm job
+    elif "SLURM_JOB_ID" in os.environ:  # async inside an existing Slurm job
+        unique_id = os.environ["SLURM_JOB_ID"]
+    else:  # local async run without Slurm
+        unique_id = wandb.util.generate_id()
 
     schedule_jobs(config, unique_id)
 

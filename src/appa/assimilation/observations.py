@@ -299,6 +299,42 @@ def create_variable_mask(idx: Tensor, num_levels: int = len(SUB_PRESSURE_LEVELS)
     return mask
 
 
+def remap_n320_to_grid(indices: Tensor, target_grid) -> Tensor:
+    r"""Remaps flattened N320 (1440x721) grid indices to a coarser regular grid.
+
+    Satellite visibility indices are produced on the native 0.25deg grid
+    (1440x721, flattened lat-major). When the autoencoder decodes to a
+    coarser regular grid (e.g. 240x121), the indices must be remapped before
+    masking physical states.
+
+    Arguments:
+        indices: Flattened indices on the 1440x721 grid.
+        target_grid: (n_lat, n_lon) of the target regular grid, latitude
+            descending from 90 to -90 and longitude from 0 to 360 - dl.
+
+    Returns:
+        Unique flattened indices on the target grid.
+    """
+    n_lat, n_lon = int(target_grid[0]), int(target_grid[1])
+
+    if (n_lat, n_lon) == (721, 1440):
+        return indices
+
+    n320 = create_N320()  # (1440*721, 2): lat descending, lon in [-180, 180)
+    lat, lon = n320[:, 0], n320[:, 1]
+
+    lon = torch.where(lon < 0, lon + 360, lon)  # [0, 360)
+    d_lon = 360.0 / n_lon
+    d_lat = 180.0 / (n_lat - 1)
+
+    lon_idx = torch.round(lon / d_lon).long() % n_lon
+    lat_idx = torch.round((90.0 - lat) / d_lat).long().clamp(0, n_lat - 1)
+
+    lookup = lat_idx * n_lon + lon_idx  # (1440*721,)
+
+    return torch.unique(lookup[indices.long()])
+
+
 def create_masks(
     masks_config,
     num_steps,
@@ -306,6 +342,7 @@ def create_masks(
     delay,
     save=None,
     split_seed=0,
+    target_grid=None,
 ):
     r"""Creates a set of masks from a configuration.
 
@@ -322,6 +359,9 @@ def create_masks(
         trajectory_dt: Number of hours between two trajectory steps.
         save: Path to save the masks. If None, does not save.
         split_seed: Seed for random splitting in the stations masks.
+        target_grid: Optional (n_lat, n_lon) of the physical grid the states
+            are decoded on. Satellite indices are remapped from the native
+            1440x721 grid with nearest-neighbor lookup. Defaults to no remap.
 
     Returns:
         A tuple of two tuples:
@@ -355,6 +395,9 @@ def create_masks(
             )
 
             for i, sat_mask in enumerate(sat_masks):
+                if target_grid is not None:
+                    sat_mask = remap_n320_to_grid(sat_mask, target_grid)
+
                 satellite_mask[i] = torch.cat((satellite_mask[i], sat_mask))
 
                 cov_tensor = mask.covariance * torch.ones(len(sat_mask))
