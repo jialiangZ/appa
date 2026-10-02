@@ -36,6 +36,23 @@ Most of our code should be well-documented. The repository follows a `src/` layo
 
 All the steps to run your own model or reproduce our results are detailed in the [Wiki](https://github.com/montefiore-sail/appa/wiki). Feel free to contact us through the issues or by mail if you have any further question.
 
+Quick start with the provided Makefile:
+
+```bash
+make sync        # recreate the environment exactly from uv.lock
+make test        # run the test suite
+make train-ae    # train the autoencoder (GPUS=1 ARGS="train.update_steps=2000")
+make train-den   # train the denoiser (ARGS="ae_run=<id>/0 latent_dump=default")
+```
+
+Equivalently, launchers can be invoked through torchrun from any directory:
+
+```bash
+torchrun --standalone --nproc-per-node 1 -m appa.launchers ae-train train.update_steps=2000
+```
+
+Training runs are seeded by default (`train.seed=42`); set `train.seed=null` to disable. To switch the active dataset resolution (240x121 ↔ 1440x721), set `APPA_RESOLUTION` in the environment.
+
 ### Data
 
 Our work is based on the ERA5 reanalysis dataset, which is provided by Google through [WeatherBench2](https://weatherbench2.readthedocs.io/en/latest/data-guide.html). We provide scripts to download and process the data in the `scripts/data` folder. A latent dump of ERA5 encoded by our autoencoder is available on [HuggingFace](https://huggingface.co/datasets/montefiore-sail/appa). This HuggingFace repository also contains our trained models and ERA5 statistics.
