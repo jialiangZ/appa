@@ -1,0 +1,43 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it using the metadata from this file."
+title: "Appa: Bending Weather Dynamics with Latent Diffusion Models for Global Data Assimilation"
+authors:
+  - family-names: Andry
+    given-names: "Gérôme"
+  - family-names: Lewin
+    given-names: Sacha
+  - family-names: Rozet
+    given-names: "François"
+  - family-names: Rochman
+    given-names: Omer
+  - family-names: Mangeleer
+    given-names: Victor
+  - family-names: Pirlet
+    given-names: Matthias
+  - family-names: Faulx
+    given-names: "Elise"
+  - family-names: "Grégoire"
+    given-names: Marilaure
+  - family-names: Louppe
+    given-names: Gilles
+type: article
+url: "https://arxiv.org/abs/2504.18720"
+repository: "https://github.com/montefiore-sail/appa"
+abstract: >-
+  Deep learning has advanced weather forecasting, but accurate prediction
+  requires identifying the current state of the atmosphere from observational
+  data. We introduce Appa, a score-based data assimilation model generating
+  global atmospheric trajectories at 0.25-degree resolution and 1-hour
+  intervals. Powered by a 565M-parameter latent diffusion model trained on
+  ERA5, Appa can be conditioned on arbitrary observations to infer posterior
+  distributions of plausible states without retraining.
+year: 2025
+month: 11
+preferred-citation:
+  type: article
+  title: "Appa: Bending Weather Dynamics with Latent Diffusion Models for Global Data Assimilation"
+  url: "https://arxiv.org/abs/2504.18720"
+  year: 2025
+  authors:
+    - family-names: Andry
+      given-names: "Gérôme"
