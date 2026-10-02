@@ -126,6 +126,76 @@ def test_era5_dataset(
         )
 
 
+def test_era5_dataset_cache_equivalence(fake_era5_dataset, fake_statistics_dataset):
+    r"""RAM-cached and lazy datasets must produce identical samples."""
+
+    tf_std = StandardizeTransform(
+        path=fake_statistics_dataset,
+        state_variables=["2m_temperature", "temperature"],
+        context_variables=["geopotential"],
+        levels=[1, 2],
+    )
+
+    common = dict(
+        path=fake_era5_dataset,
+        start_date="1999-01-01",
+        end_date="1999-01-01",
+        trajectory_size=3,
+        trajectory_dt=2,
+        state_variables=["2m_temperature", "temperature"],
+        context_variables=["geopotential"],
+        levels=[1, 2],
+        transform=tf_std,
+    )
+
+    ds_lazy = ERA5Dataset(cache="none", **common)
+    ds_ram = ERA5Dataset(cache="ram", **common)
+
+    assert ds_lazy.cache == "none"
+    assert ds_ram.cache == "ram"
+
+    assert len(ds_lazy) == len(ds_ram)
+
+    for idx in [0, 1, 5]:
+        state_l, context_l, time_l = ds_lazy[idx]
+        state_r, context_r, time_r = ds_ram[idx]
+
+        assert state_l.shape == state_r.shape
+        assert context_l.shape == context_r.shape
+        assert time_l.shape == time_r.shape
+
+        assert torch.allclose(state_l, state_r, equal_nan=True)
+        assert torch.allclose(context_l, context_r, equal_nan=True)
+        assert torch.equal(time_l, time_r)
+
+    # "auto" resolves to "ram" for a small dataset
+    ds_auto = ERA5Dataset(cache="auto", **common)
+    assert ds_auto.cache == "ram"
+
+    # Mutating a cached sample must not corrupt the cache
+    state_before, _, _ = ds_ram[0]
+    state_before.fill_(0.0)
+    state_after, _, _ = ds_ram[0]
+    assert not torch.allclose(state_before, state_after)
+
+
+def test_era5_dataset_incomplete_trajectory_raises(fake_era5_dataset):
+    r"""Both cache modes reject incomplete trajectories identically."""
+
+    common = dict(
+        path=fake_era5_dataset,
+        start_date="1999-01-01",
+        end_date="1999-01-01",
+        trajectory_size=5,
+        trajectory_dt=4,
+    )
+
+    for cache in ["none", "ram"]:
+        ds = ERA5Dataset(cache=cache, **common)
+        with pytest.raises(ValueError):
+            _ = ds[len(ds) - 1]
+
+
 def test_StandardizeTransform(fake_era5_dataset, fake_statistics_dataset):
     tf_std = StandardizeTransform(path=fake_statistics_dataset)
 
@@ -151,19 +221,19 @@ def test_StandardizeTransform(fake_era5_dataset, fake_statistics_dataset):
     print("Samples shape:", samples.shape)
     print("Transformed samples shape:", samples_tf.shape)
 
-    assert not torch.equal(
-        samples, samples_tf
-    ), "Transformed sample should differ from the original."
-    assert torch.equal(
-        time, time_tf
-    ), "Time features should remain unchanged after transformation."
+    assert not torch.equal(samples, samples_tf), (
+        "Transformed sample should differ from the original."
+    )
+    assert torch.equal(time, time_tf), (
+        "Time features should remain unchanged after transformation."
+    )
 
     mean = torch.mean(samples_tf, dim=(0, 2, 3))
     std = torch.std(samples_tf, dim=(0, 2, 3))
 
-    assert torch.all(
-        (mean >= -1) & (mean <= 1)
-    ), "Mean values should be within [-1, 1] with high probability."
-    assert torch.all(
-        (std >= 0) & (std <= 2)
-    ), "Std values should be within [0, 2] with high probability."
+    assert torch.all((mean >= -1) & (mean <= 1)), (
+        "Mean values should be within [-1, 1] with high probability."
+    )
+    assert torch.all((std >= 0) & (std <= 2)), (
+        "Std values should be within [0, 2] with high probability."
+    )

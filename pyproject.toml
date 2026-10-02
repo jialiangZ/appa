@@ -51,4 +51,5 @@ section-order = ["future", "third-party", "first-party", "local-folder"]
 preview = true
 
 [tool.setuptools.packages.find]
-include = ["appa*"]
+where = ["src"]
+include = ["appa*", "experiments*"]

@@ -1,0 +1,37 @@
+defaults:
+  - ae: cae_f32
+  - optim: soap
+
+train:
+  update_steps: 100_000
+  # Number of elements that can fit at once on a gpu
+  batch_element_per_gpu: 1
+  # Effective batch size for one optimizer step
+  batch_size_per_step: 64
+  precision: float32
+  # Data caching: "auto" (RAM when the split fits in cache_size_limit_gb),
+  # "ram", or "none" (lazy Zarr)
+  cache: auto
+  # Minimal number of samples seen to log statistics
+  log_interval: 1024
+  # Minimal number of samples seen to save checkpoints
+  save_interval: 8192
+  shuffle_training: true
+  trajectory_size: 1
+  sub_pressure_levels: false
+
+valid:
+  log_interval: 16384
+  # Quantitative
+  n_valid_samples: 64
+  # Qualitative
+  n_valid_snapshots: 6
+
+loss:
+  error: mse
+  latitude_weighting: true
+  level_weighting: false
+  l2_weight: 0.
+
+slurm_account: sail
+wandb_entity: montefiore_sail

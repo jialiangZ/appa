@@ -1,0 +1,13 @@
+name: "vit_small"
+arch: "vit"
+mod_features: 128
+hid_channels: 384
+hid_blocks: 6
+ffn_factor: 2
+attention_heads: 6
+qk_norm: True
+rope: True
+patch_size: [2, 1, 1]
+window_size: null
+dropout: 0.0
+checkpointing: true

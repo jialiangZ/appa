@@ -1,0 +1,15 @@
+name: "cae_f${.resize}c${.lat_channels}"
+shape: [721, 1440]
+resize: 32
+saturation: "softclip2"
+noise_level: 0.0
+# Small config for limited VRAM (24GB shared with other jobs)
+lat_channels: 32
+hid_channels: [32, 64, 128, 192, 256, 320]
+hid_blocks: [1, 1, 1, 1, 1, 1]
+pixel_shuffle: true
+ffn_factor: 1
+dropout: 0.0
+patch_size: [1, 1]
+checkpointing: false
+identity_init: true

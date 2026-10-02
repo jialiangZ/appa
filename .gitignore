@@ -4,6 +4,13 @@
 
 **.zarr
 
+# Model weights, latent dumps, generated outputs and downloaded data (local repro)
+artifacts/
+*.pth
+*.h5
+*.pt
+.cache/
+
 # DAWGZ
 .dawgz/
 
@@ -169,3 +176,4 @@ dmypy.json
 
 # Cython debug symbols
 cython_debug/
+.ruff_cache/

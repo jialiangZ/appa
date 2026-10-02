@@ -12,12 +12,25 @@ This repository contains the code and data for the paper *Appa: Bending Weather 
 
 ### Code
 
-Most of our code should be well-documented. We split it in three parts:
-- `appa`: Main module containing the code for the data loading and processing, architectures, diffusion modules, losses, etc.
-- `experiments`: Contains the scripts used to run each experiment in the paper.
-- `scripts`: Contains data download and processing scripts, as well as plotting scripts.
+Most of our code should be well-documented. The repository follows a `src/` layout with code and artifacts strictly separated:
 
-The `tests` folder contains unit tests for the main parts of the code.
+```
+├── src/                  # all source code
+│   ├── appa/             # main module, organized by domain
+│   │   ├── config/       #   Hydra helpers and data-path registry (switch resolution with APPA_RESOLUTION)
+│   │   ├── data/         #   ERA5 datasets, loaders, transforms, and download tools
+│   │   ├── models/       #   Diffusion process, samplers, losses, and neural architectures (models/nn)
+│   │   ├── assimilation/ #   Observation operators for data assimilation
+│   │   ├── training/     #   Optimizers (SOAP, etc.)
+│   │   ├── diagnostics/  #   Plotting and spectral/reconstruction diagnostics
+│   │   └── utils/        #   Dates, grids, math, and I/O helpers
+│   ├── experiments/      # experiment scripts (importable package; one folder per domain)
+│   └── scripts/          # data download/processing scripts and plotting scripts (plot_*.py)
+├── tests/                # unit tests (test_<domain>_<module>.py)
+├── tools/                # one-off debugging and verification scripts
+├── artifacts/            # gitignored outputs and data (autoencoders/, data/)
+└── run_*.py              # local, no-Slurm launchers (torchrun entry points)
+```
 
 ### Usage
 
