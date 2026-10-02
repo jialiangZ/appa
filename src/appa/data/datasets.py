@@ -2,6 +2,7 @@ r"""Datasets."""
 
 import dask
 import h5py
+import logging
 import numpy as np
 import pandas as pd
 import torch
@@ -26,6 +27,8 @@ from .const import (
 from ..config import PATH_ERA5
 from ..utils.dates import assert_date_format, get_date_features
 from ..utils.io import safe_load
+
+logger = logging.getLogger(__name__)
 
 _VALID_CACHE_MODES = ("auto", "ram", "none")
 
@@ -226,10 +229,10 @@ class ERA5Dataset(Dataset):
         except (AttributeError, TypeError):  # Not all array types expose nbytes.
             size_gb = float("nan")
 
-        print(
-            f"ERA5Dataset: caching {self.dataset.time.size} time steps to RAM "
-            f"({size_gb:.2f} GB)...",
-            flush=True,
+        logger.info(
+            "ERA5Dataset: caching %d time steps to RAM (%.2f GB)...",
+            self.dataset.time.size,
+            size_gb,
         )
 
         with dask.config.set(**{"array.slicing.split_large_chunks": True}):

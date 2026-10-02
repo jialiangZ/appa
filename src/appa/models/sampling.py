@@ -1,5 +1,6 @@
 r"""Diffusion helpers."""
 
+import logging
 import torch
 import torch.nn as nn
 
@@ -9,6 +10,8 @@ from typing import Callable
 
 from appa.models.diffusion import Schedule
 from appa.utils.math import gauss_legendre
+
+logger = logging.getLogger(__name__)
 
 
 class Sampler(nn.Module):
@@ -92,7 +95,7 @@ class DDPMSampler(Sampler):
             xt = self.step(xt, t, t - dt)
 
             if not self.silent:
-                print(f"Diffusion step {i + 1}/{self.steps} done.", flush=True)
+                logger.info("Diffusion step %d/%d done.", i + 1, self.steps)
 
         return xt
 
@@ -162,7 +165,7 @@ class RewindDDIMSampler(DDIMSampler):
             x_t = x_s + B * torch.randn_like(x_s)
 
             if not self.silent:
-                print(f"Diffusion step {i + 1}/{self.steps} done.", flush=True)
+                logger.info("Diffusion step %d/%d done.", i + 1, self.steps)
 
         x = x_t
 
@@ -258,7 +261,7 @@ class LMSSampler(Sampler):
             xt = xt + delta
 
             if not self.silent:
-                print(f"Diffusion step {i + 1}/{self.steps} done.", flush=True)
+                logger.info("Diffusion step %d/%d done.", i + 1, self.steps)
 
         x0 = xt
 

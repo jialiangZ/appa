@@ -1,5 +1,6 @@
 r"""Diffusion helpers."""
 
+import logging
 import math
 import torch
 import torch.nn as nn
@@ -16,6 +17,8 @@ from appa.utils.math import gmres
 from appa.models.nn.sptgraph import SpatioTemporalGraphDiT
 from appa.models.nn.triggers import disable_checkpointing, disable_xfa
 from appa.models.nn.vit import ViDiT
+
+logger = logging.getLogger(__name__)
 
 
 class Denoiser(nn.Module):
@@ -448,8 +451,8 @@ class Schedule(nn.Module):
         self.t_max = 1 - 1 / 256 if bfloat16 else 1.0
 
         if bfloat16:
-            print(
-                "Warning: Using bfloat16 precision, "
+            logger.warning(
+                "Using bfloat16 precision, "
                 "please make sure to use schedule.sigma_tmax (t_max ≠ 1.0!)."
             )
 

@@ -1,5 +1,6 @@
 r"""Tools to download ERA5 data from WeatherBench2."""
 
+import logging
 import os
 import xarray as xr
 
@@ -7,6 +8,8 @@ from pathlib import Path
 from typing import Optional, Sequence, Tuple
 
 from .const import ERA5_AVAILABLE_CONFIGURATIONS
+
+logger = logging.getLogger(__name__)
 
 
 def display_available_datasets() -> None:
@@ -73,7 +76,7 @@ def download(
     """
 
     url = get_bucket_url(time_interval, total_levels, resolution, include_poles)
-    print(f"Downloading ERA5 data from {url}...", flush=True)
+    logger.info("Downloading ERA5 data from %s...", url)
 
     data = xr.open_zarr(
         url, chunks="auto", storage_options={"token": "anon"}, zarr_format=2, consolidated=False
@@ -96,13 +99,13 @@ def download(
             data = data.sel(time=time_slice)
 
     dataset_size_gb = data.nbytes / 1e9
-    print(f"Size of the dataset: {dataset_size_gb:.2f} GB", flush=True)
+    logger.info("Size of the dataset: %.2f GB", dataset_size_gb)
 
     times = None
     if "time" in data.coords:
         times = data.coords["time"]
     elif os.path.exists(output_path):
-        print("Loading existing data to get time coordinate...", flush=True)
+        logger.info("Loading existing data to get time coordinate...")
         existing_data = xr.open_zarr(output_path, chunks="auto", zarr_format=2, consolidated=False)
         if "time" in existing_data.coords:
             times = existing_data.coords["time"]
@@ -123,11 +126,11 @@ def download(
         # Expand variables without time dimension (e.g., orography)
         for var in data:
             if "time" not in data[var].dims:
-                print("Expanding variable without time dimension:", var, flush=True)
+                logger.info("Expanding variable without time dimension: %s", var)
                 data[var] = data[var].expand_dims(time=times)
     else:
-        print("No time coordinate found in the dataset.", flush=True)
-        print("Variables without time dimension cannot be expanded!", flush=True)
+        logger.warning("No time coordinate found in the dataset.")
+        logger.warning("Variables without time dimension cannot be expanded!")
 
     # Chunk the data to limit memory usage during saving
     data = data.chunk({"time": chunk_size})
@@ -137,4 +140,4 @@ def download(
 
     data.to_zarr(output_path, mode="a-", zarr_format=2)
 
-    print(f"Download complete. Zarr store saved to: {output_path}", flush=True)
+    logger.info("Download complete. Zarr store saved to: %s", output_path)
