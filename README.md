@@ -21,7 +21,7 @@ Most of our code should be well-documented. The repository follows a `src/` layo
 │   │   ├── data/         #   ERA5 datasets, loaders, transforms, and download tools
 │   │   ├── models/       #   Diffusion process, samplers, losses, and neural architectures (models/nn)
 │   │   ├── assimilation/ #   Observation operators for data assimilation
-│   │   ├── training/     #   Optimizers (SOAP, etc.)
+│   │   ├── training/     #   Lightning modules, datamodules, callbacks, loggers, and optimizers (SOAP, etc.)
 │   │   ├── diagnostics/  #   Plotting and spectral/reconstruction diagnostics
 │   │   └── utils/        #   Dates, grids, math, and I/O helpers
 │   ├── experiments/      # experiment scripts (importable package; one folder per domain)
@@ -45,11 +45,18 @@ make train-ae    # train the autoencoder (GPUS=1 ARGS="train.update_steps=2000")
 make train-den   # train the denoiser (ARGS="ae_run=<id>/0 latent_dump=default")
 ```
 
-Equivalently, launchers can be invoked through torchrun from any directory:
+Equivalently, launchers can be invoked directly from any directory (training is
+powered by [PyTorch Lightning](https://lightning.ai); DDP processes are spawned
+automatically, so no `torchrun` is needed — set `APPA_DEVICES` for multi-GPU):
 
 ```bash
-torchrun --standalone --nproc-per-node 1 -m appa.launchers ae-train train.update_steps=2000
+python -m appa.launchers ae-train train.update_steps=2000
 ```
+
+Experiments are tracked with [SwanLab](https://swanlab.cn) or
+[Weights & Biases], selected through the `tracker` section of the training
+configuration (`tracker.name`: `swanlab`, `wandb`, or `none`). Use
+`SWANLAB_MODE=disabled` / `WANDB_MODE=disabled` for untracked local runs.
 
 Training runs are seeded by default (`train.seed=42`); set `train.seed=null` to disable. To switch the active dataset resolution (240x121 ↔ 1440x721), set `APPA_RESOLUTION` in the environment.
 

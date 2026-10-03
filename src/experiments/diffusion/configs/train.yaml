@@ -25,6 +25,9 @@ train:
   sigma_min: 1e-3
   sigma_max: 1e3
   inject_ae_noise: true
+  # Optional date overrides for the latent dump (default: DATASET_DATES_TRAINING)
+  start_date: null
+  end_date: null
 
 loss:
   sigma_min_penalty: 0
@@ -38,6 +41,9 @@ valid:
   n_valid_samples_per_date: 1
   n_valid_channels: 3
   denoising_steps: 64
+  # Optional date overrides for the latent dump (default: DATASET_DATES_VALIDATION)
+  start_date: null
+  end_date: null
 
 # AE run that generated the latents (e.g., cg33oqw8/0)
 ae_run: ???
@@ -46,4 +52,8 @@ latent_dump: ???
 latent_data: "era5.h5"
 
 slurm_account: sail
-wandb_entity: montefiore_sail
+# Experiment tracker: swanlab | wandb | none. `entity` is the wandb entity
+# or swanlab workspace.
+tracker:
+  name: none
+  entity: montefiore_sail

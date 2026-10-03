@@ -1,14 +1,14 @@
 r"""Command-line launchers for local (no-Slurm) runs.
 
-Usage with torchrun (from the repository root or anywhere):
+Usage (from the repository root or anywhere; DDP processes are spawned by
+Lightning, so no torchrun is needed):
 
-    torchrun --standalone --nproc-per-node 1 -m appa.launchers ae-train [overrides...]
-    torchrun --standalone --nproc-per-node 1 -m appa.launchers den-train [overrides...]
-    torchrun --standalone --nproc-per-node 1 -m appa.launchers generate <model_path> [overrides...]
+    python -m appa.launchers ae-train [overrides...]
+    python -m appa.launchers den-train [overrides...]
+    python -m appa.launchers generate <model_path> [overrides...]
 
-The same subcommands are available through the `appa` console script, but the
-training entry points require a torchrun process group (DDP), so prefer
-torchrun for `ae-train` and `den-train`.
+The number of GPUs is controlled by ``APPA_DEVICES`` (default: all visible
+devices, themselves selected through ``CUDA_VISIBLE_DEVICES``).
 """
 
 import sys
@@ -36,41 +36,39 @@ __all__ = [
 def ae_train(overrides) -> None:
     r"""Launches a local autoencoder training run."""
 
-    import wandb
-
+    from appa.training.entry import get_or_create_runid
     from experiments.autoencoder.train import train
 
     cfg = compose(config_file=CONFIGS["ae-train"], overrides=overrides)
 
-    runid = wandb.util.generate_id()
+    runid = get_or_create_runid()
     print(f"Starting local AE training with runid: {runid}")
 
-    train(runid, cfg, fork_lap=0, lap=0)
+    train(runid, cfg)
 
 
 def den_train(overrides) -> None:
     r"""Launches a local latent diffusion (denoiser) training run."""
 
-    import wandb
-
+    from appa.training.entry import get_or_create_runid
     from experiments.diffusion.train import train
 
     cfg = compose(config_file=CONFIGS["den-train"], overrides=overrides)
 
-    runid = wandb.util.generate_id()
+    runid = get_or_create_runid()
     print(f"Starting local denoiser training with runid: {runid}")
 
-    train(runid, cfg, fork_lap=0, lap=0)
+    train(runid, cfg)
 
 
 def generate(argv) -> None:
     r"""Generates prior trajectories from a trained denoiser."""
 
-    from pathlib import Path
-
     import torch
+
     from einops import rearrange
     from omegaconf import OmegaConf
+    from pathlib import Path
 
     from appa.utils.io import safe_load, safe_save
     from experiments.diffusion.generate import generate_prior_trajectory
@@ -118,8 +116,7 @@ def generate(argv) -> None:
                 traj = safe_load(traj_file)
                 ts = safe_load(ts_file)
                 print(
-                    f"  {date}: trajectory = {tuple(traj.shape)}, "
-                    f"timestamps = {tuple(ts.shape)}",
+                    f"  {date}: trajectory = {tuple(traj.shape)}, timestamps = {tuple(ts.shape)}",
                     flush=True,
                 )
                 all_traj.append(traj)

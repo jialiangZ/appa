@@ -1,12 +1,11 @@
-r"""Local (no-Slurm) launcher for autoencoder training (thin wrapper).
+r"""Local launcher for autoencoder training (thin wrapper).
 
 Usage:
-    CUDA_VISIBLE_DEVICES=3 WANDB_MODE=disabled torchrun \
-        --standalone --nproc-per-node 1 run_ae_train.py [overrides...]
+    CUDA_VISIBLE_DEVICES=3 SWANLAB_MODE=disabled python run_ae_train.py [overrides...]
 
 Example:
-    CUDA_VISIBLE_DEVICES=3 WANDB_MODE=disabled torchrun --standalone \
-        --nproc-per-node 1 run_ae_train.py train.update_steps=2000
+    CUDA_VISIBLE_DEVICES=3 SWANLAB_MODE=disabled python run_ae_train.py \
+        train.update_steps=2000
 """
 
 from appa.launchers import ae_train

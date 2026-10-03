@@ -1,4 +1,6 @@
 PYTHON ?= .venv/bin/python
+# generate.py manages its own torch.distributed setup and expects a torchrun
+# process group; the Lightning-powered training entry points do not.
 TORCHRUN ?= .venv/bin/torchrun
 GPUS ?= 1
 ARGS ?=
@@ -30,12 +32,12 @@ bench: ## Benchmark ERA5Dataset loading modes
 	$(PYTHON) src/scripts/bench_dataloader.py
 
 train-ae: ## Train the autoencoder. Usage: make train-ae GPUS=1 ARGS="train.update_steps=2000"
-	CUDA_VISIBLE_DEVICES=$${CUDA_VISIBLE_DEVICES:-0} WANDB_MODE=$${WANDB_MODE:-disabled} \
-		$(TORCHRUN) --standalone --nproc-per-node $(GPUS) -m appa.launchers ae-train $(ARGS)
+	CUDA_VISIBLE_DEVICES=$${CUDA_VISIBLE_DEVICES:-0} SWANLAB_MODE=$${SWANLAB_MODE:-disabled} \
+		APPA_DEVICES=$(GPUS) $(PYTHON) -m appa.launchers ae-train $(ARGS)
 
 train-den: ## Train the denoiser. Usage: make train-den ARGS="ae_run=<id>/0 latent_dump=default"
-	CUDA_VISIBLE_DEVICES=$${CUDA_VISIBLE_DEVICES:-0} WANDB_MODE=$${WANDB_MODE:-disabled} \
-		$(TORCHRUN) --standalone --nproc-per-node $(GPUS) -m appa.launchers den-train $(ARGS)
+	CUDA_VISIBLE_DEVICES=$${CUDA_VISIBLE_DEVICES:-0} SWANLAB_MODE=$${SWANLAB_MODE:-disabled} \
+		APPA_DEVICES=$(GPUS) $(PYTHON) -m appa.launchers den-train $(ARGS)
 
 generate: ## Generate prior trajectories. Usage: make generate ARGS="<model_path> diffusion.num_steps=64"
 	$(TORCHRUN) --standalone --nproc-per-node 1 -m appa.launchers generate $(ARGS)

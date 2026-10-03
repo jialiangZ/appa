@@ -37,4 +37,8 @@ loss:
   l2_weight: 0.
 
 slurm_account: sail
-wandb_entity: montefiore_sail
+# Experiment tracker: swanlab | wandb | none. `entity` is the wandb entity
+# or swanlab workspace.
+tracker:
+  name: none
+  entity: montefiore_sail
