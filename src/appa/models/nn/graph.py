@@ -4,20 +4,31 @@ import functools
 import math
 import numpy as np
 import torch
-import torch.nn as nn
 import warnings
 
+from torch import nn
+
+# The legacy xformers sparse-attention API (xformers.sparse.SparseCSRTensor and
+# xformers.components.attention.core) was removed in xformers >= 0.0.30. When
+# unavailable, sparse graph attention falls back to the pure-PyTorch
+# implementation (fallback_attention) and full attention is unchanged.
 with warnings.catch_warnings(action="ignore"):
-    import xformers.components.attention.core as xfa
-    import xformers.sparse as xfs
+    try:
+        import xformers.components.attention.core as xfa
+        import xformers.sparse as xfs
+
+        if not hasattr(xfs, "SparseCSRTensor"):
+            raise ImportError
+    except (ImportError, AttributeError):
+        xfa = None
+        xfs = None
 
 from einops import rearrange
 from torch import LongTensor, Tensor
 from torch.nn.functional import scaled_dot_product_attention
 from torch.utils.checkpoint import checkpoint
-from typing import Optional
 
-import appa.models.nn.triggers as triggers
+from appa.models.nn import triggers
 
 from .layers import Linear, SirenEmbedding
 
@@ -67,7 +78,7 @@ class GraphAttention(nn.Module):
         self.heads = heads
         self.chunks = chunks
         self.checkpointing = checkpointing
-        self.use_xfa = use_xfa and xfa._has_cpp_library
+        self.use_xfa = use_xfa and xfa is not None and xfa._has_cpp_library
         self.xfa_warning = False  # Flag for warning about XFA issues
 
     @staticmethod
@@ -77,7 +88,7 @@ class GraphAttention(nn.Module):
         M: int,
         N: int,
         divisible_by: int = 4,
-    ) -> xfs.SparseCSRTensor:
+    ) -> "xfs.SparseCSRTensor":
         nonzeros = edges[:, 0] * N + edges[:, 1]
         nonzeros = set(nonzeros.tolist())
         zeros = []
@@ -147,6 +158,7 @@ class GraphAttention(nn.Module):
         for ii, jj in zip(
             torch.chunk(i, chunks, dim=-1),
             torch.chunk(j, chunks, dim=-1),
+            strict=False,
         ):
             qi = q[..., ii, :]
             kj = k[..., jj, :]
@@ -170,6 +182,7 @@ class GraphAttention(nn.Module):
             torch.chunk(i, chunks, dim=-1),
             torch.chunk(j, chunks, dim=-1),
             torch.chunk(weights, chunks, dim=-1),
+            strict=False,
         ):
             vj = v[..., jj, :]
             vi = w[..., None] * vj
@@ -230,7 +243,7 @@ class GraphAttention(nn.Module):
 
         q, k = self.qk_norm(q), self.qk_norm(k)
 
-        batch_size = max((np.prod(t.shape[:-2]) for t in (q, k)))
+        batch_size = max(np.prod(t.shape[:-2]) for t in (q, k))
 
         if triggers.ENABLE_XFA and self.use_xfa and batch_size > 65536 and not self.xfa_warning:
             self.xfa_warning = True
@@ -292,9 +305,9 @@ class GraphPoolAttention(nn.Module):
         hid_channels: int,
         out_channels: int,
         heads: int = 1,
-        k_to_q_idx: Optional[Tensor] = None,
+        k_to_q_idx: Tensor | None = None,
         identity_init: bool = False,
-        dropout: float = None,
+        dropout: float | None = None,
         checkpointing: bool = False,
         use_xfa: bool = True,
     ):
@@ -394,7 +407,7 @@ class GraphSelfAttention(nn.Module):
         channels: int,
         edges: Tensor,
         heads: int = 1,
-        dropout: float = None,
+        dropout: float | None = None,
         checkpointing: bool = False,
         use_xfa: bool = True,
     ):
@@ -453,12 +466,14 @@ def monkey_coo_to_csr(m, n, row_indices, column_indices):
     row_offsets = torch.nn.functional.pad(row_offsets, (1, 0))
     return row_offsets, column_indices
 
+
 def monkey_round_nnz(mask, divisible_by=4):
     nnz = torch.count_nonzero(mask)
     cunz = torch.cumsum(~mask.flatten(), dim=0)
     flip = cunz <= (-nnz) % divisible_by
 
     return torch.logical_or(mask, flip.reshape_as(mask))
+
 
 def monkey_masked_matmul(cls, a, b, mask):
     assert mask.shape[1] == a.shape[1]
@@ -489,7 +504,9 @@ def monkey_masked_matmul(cls, a, b, mask):
         tansp_info,
     )
 
-xfs.utils._coo_to_csr = monkey_coo_to_csr
-xfs.utils._round_nnz = monkey_round_nnz
-xfs.SparseCSRTensor._masked_matmul = classmethod(monkey_masked_matmul)
+
+if xfs is not None:
+    xfs.utils._coo_to_csr = monkey_coo_to_csr
+    xfs.utils._round_nnz = monkey_round_nnz
+    xfs.SparseCSRTensor._masked_matmul = classmethod(monkey_masked_matmul)
 # fmt: on

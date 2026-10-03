@@ -9,7 +9,7 @@ References:
 
 import torch
 
-from typing import Iterable, Tuple
+from collections.abc import Iterable
 
 
 class SOAP(torch.optim.Optimizer):
@@ -45,7 +45,7 @@ class SOAP(torch.optim.Optimizer):
         self,
         params: Iterable[torch.nn.Parameter],
         lr: float = 1e-3,
-        betas: Tuple[float, float, float] = (0.9, 0.99, 0.99),
+        betas: tuple[float, float, float] = (0.9, 0.99, 0.99),
         eps: float = 1e-8,
         weight_decay: float = 0.0,
         precondition_frequency: int = 16,

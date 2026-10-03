@@ -3,17 +3,18 @@ r"""Optimization and training helpers."""
 __all__ = [
     "ExponentialMovingAverage",
     "get_optimizer",
+    "grad_norm",
+    "has_finite_grads",
     "safe_gd_step",
 ]
 
 import math
 import torch
-import torch.nn as nn
 
+from collections.abc import Iterable, Sequence
 from functools import partial
-from heavyball import ForeachCachedDelayedPSGDKron
-from torch import Tensor
-from typing import Iterable, Optional, Sequence, Tuple
+from heavyball import PSGDKron
+from torch import Tensor, nn
 
 from .soap import SOAP
 
@@ -29,7 +30,7 @@ class ExponentialMovingAverage(torch.optim.swa_utils.AveragedModel):
     def __init__(
         self,
         module: nn.Module,
-        decay: Optional[float] = None,
+        decay: float | None = None,
     ):
         if decay is None:
             module = None
@@ -59,17 +60,17 @@ def get_optimizer(
     betas: Sequence[float] = (0.9, 0.999, 0.999),
     learning_rate: float = 1e-4,
     weight_decay: float = 0.0,
-    scheduler: Optional[str] = None,
-    update_steps: Optional[int] = None,
-    warmup: Optional[int] = None,
+    scheduler: str | None = None,
+    update_steps: int | None = None,
+    warmup: int | None = None,
     # SOAP & PSGD
     precondition_frequency: int = 16,
     precondition_size: int = 4096,
     merge_dims: bool = False,
     # Ignored
-    name: str = None,
-    grad_clip: Optional[float] = None,
-) -> Tuple[torch.optim.Optimizer, torch.optim.lr_scheduler.LRScheduler]:
+    name: str | None = None,
+    grad_clip: float | None = None,
+) -> tuple[torch.optim.Optimizer, torch.optim.lr_scheduler.LRScheduler]:
     r"""Instantiates an optimizer and scheduler.
 
     Arguments:
@@ -104,7 +105,7 @@ def get_optimizer(
             merge_dims=merge_dims,
         )
     elif optimizer == "psgd":
-        optimizer = ForeachCachedDelayedPSGDKron(
+        optimizer = PSGDKron(
             params,
             lr=learning_rate,
             beta=betas[0],
@@ -140,10 +141,48 @@ def get_optimizer(
     return optimizer, scheduler
 
 
+def grad_norm(optimizer: torch.optim.Optimizer) -> Tensor | None:
+    r"""Returns the total (unclipped) gradient norm of an optimizer.
+
+    Arguments:
+        optimizer: An optimizer.
+
+    Returns:
+        The total gradient norm, or :py:`None` if no parameter has a gradient.
+    """
+
+    norms = [
+        p.grad.norm()
+        for group in optimizer.param_groups
+        for p in group["params"]
+        if p.grad is not None
+    ]
+
+    if not norms:
+        return None
+
+    return torch.linalg.vector_norm(torch.stack(norms))
+
+
+def has_finite_grads(optimizer: torch.optim.Optimizer) -> bool:
+    r"""Returns whether all gradients of an optimizer are finite.
+
+    Arguments:
+        optimizer: An optimizer.
+    """
+
+    for group in optimizer.param_groups:
+        for p in group["params"]:
+            if p.grad is not None and not torch.isfinite(p.grad).all():
+                return False
+
+    return True
+
+
 def safe_gd_step(
     optimizer: torch.optim.Optimizer,
-    grad_clip: Optional[float] = None,
-    scaler: Optional[torch.cuda.amp.GradScaler] = None,
+    grad_clip: float | None = None,
+    scaler: torch.cuda.amp.GradScaler | None = None,
 ) -> Tensor:
     r"""Applies a gradient descent (GD) optimization step.
 

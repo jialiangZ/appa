@@ -5,17 +5,29 @@ __all__ = [
 ]
 
 import torch
-import torch.nn as nn
 import warnings
 
+from torch import nn
+
+# The legacy xformers sparse-attention API (xformers.sparse.SparseCSRTensor and
+# xformers.components.attention.core) was removed in xformers >= 0.0.30. When
+# unavailable, sparse attention masks are not supported and dense attention
+# (tensor masks or no mask) is used instead.
 with warnings.catch_warnings(action="ignore"):
-    import xformers.components.attention.core as xfa
-    import xformers.sparse as xfs
+    try:
+        import xformers.components.attention.core as xfa
+        import xformers.sparse as xfs
+
+        if not hasattr(xfs, "SparseCSRTensor"):
+            raise ImportError
+    except (ImportError, AttributeError):
+        xfa = None
+        xfs = None
 
 from einops import rearrange
 from torch import Tensor
 from torch.utils.checkpoint import checkpoint
-from typing import Optional, Tuple, Union
+from typing import Union
 
 
 class MultiheadSelfAttention(nn.Module):
@@ -34,7 +46,7 @@ class MultiheadSelfAttention(nn.Module):
         channels: int,
         attention_heads: int = 1,
         qk_norm: bool = True,
-        dropout: Optional[float] = None,
+        dropout: float | None = None,
         checkpointing: bool = False,
     ):
         super().__init__()
@@ -60,8 +72,8 @@ class MultiheadSelfAttention(nn.Module):
     def _forward(
         self,
         x: Tensor,
-        theta: Optional[Tensor] = None,
-        mask: Optional[Union[Tensor, xfs.SparseCSRTensor]] = None,
+        theta: Tensor | None = None,
+        mask: Union[Tensor, "xfs.SparseCSRTensor"] | None = None,
     ) -> Tensor:
         r"""
         Arguments:
@@ -82,7 +94,7 @@ class MultiheadSelfAttention(nn.Module):
             theta = rearrange(theta, "... L (H C) -> ... H L C", H=self.heads)
             q, k = apply_rope(q, k, theta)
 
-        if isinstance(mask, xfs.SparseCSRTensor):
+        if xfs is not None and isinstance(mask, xfs.SparseCSRTensor):
             y = xfa.scaled_dot_product_attention(
                 q=rearrange(q, "... L C -> (...) L C"),
                 k=rearrange(k, "... L C -> (...) L C"),
@@ -91,6 +103,11 @@ class MultiheadSelfAttention(nn.Module):
                 dropout=self.dropout if self.training else None,
             )
             y = y.reshape(q.shape[:-2] + y.shape[-2:])
+        elif mask is not None and not torch.is_tensor(mask):
+            raise NotImplementedError(
+                "Sparse attention masks require xformers < 0.0.30 "
+                "(the legacy xformers.sparse API was removed in newer versions)."
+            )
         else:
             y = torch.nn.functional.scaled_dot_product_attention(
                 query=q,
@@ -108,8 +125,8 @@ class MultiheadSelfAttention(nn.Module):
     def forward(
         self,
         x: Tensor,
-        theta: Optional[Tensor] = None,
-        mask: Optional[Union[Tensor, xfs.SparseCSRTensor]] = None,
+        theta: Tensor | None = None,
+        mask: Union[Tensor, "xfs.SparseCSRTensor"] | None = None,
     ) -> Tensor:
         if self.checkpointing:
             return checkpoint(self._forward, x, theta, mask, use_reentrant=False)
@@ -117,7 +134,7 @@ class MultiheadSelfAttention(nn.Module):
             return self._forward(x, theta, mask)
 
 
-def apply_rope(q: Tensor, k: Tensor, theta: Tensor) -> Tuple[Tensor, Tensor]:
+def apply_rope(q: Tensor, k: Tensor, theta: Tensor) -> tuple[Tensor, Tensor]:
     r"""
     References:
         | RoFormer: Enhanced Transformer with Rotary Position Embedding (Su et al., 2021)
@@ -206,7 +223,8 @@ def monkey_masked_matmul(cls, a, b, mask):
         tansp_info,
     )
 
-xfs.utils._coo_to_csr = monkey_coo_to_csr
-xfs.utils._round_nnz = monkey_round_nnz
-xfs.SparseCSRTensor._masked_matmul = classmethod(monkey_masked_matmul)
+if xfs is not None:
+    xfs.utils._coo_to_csr = monkey_coo_to_csr
+    xfs.utils._round_nnz = monkey_round_nnz
+    xfs.SparseCSRTensor._masked_matmul = classmethod(monkey_masked_matmul)
 # fmt: on
