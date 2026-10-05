@@ -294,6 +294,8 @@ def reanalysis(
     latent_stats = safe_load(stats_path)
     latent_mean = latent_stats["mean"]
     latent_std = latent_stats["std"]
+    # [中文注释 | 论文§3.1] 把 AE 的 latent 噪声方差 σ_z²(=1e-2)并入 latent_std:
+    # decode 前的反标准化因此带上 decoder 不确定性, 并最终进入 MMPS 的有效协方差.
     latent_std = torch.sqrt(latent_std**2 + ae_cfg.ae.noise_level**2)
 
     ae = load_auto_encoder(latent_dir / "ae", "model", device="cpu", eval_mode=True)
@@ -430,6 +432,10 @@ def reanalysis(
                         # Stop observing beyond the assimilation window
                         break
 
+                    # [中文注释 | 论文§4.4] 观测 y 的制造: 用同一个 ℳ 从 ERA5 真值
+                    # 抠出模拟观测 y_i = ℳ_i(x_i) + noise(站点 std 1% / cov 1e-4,
+                    # 卫星 std 10% / cov 1e-2, 对角 Σ_y). 与运行时的 y_hat 共享
+                    # 同一个 mask_fn → 长度与排列严格一致.
                     x_p, c_p, t_p = era5[absolute_start_idx + t]
                     x_p = rearrange(
                         x_p.to(device, non_blocking=True), "T Z Lat Lon -> T (Lat Lon) Z"
@@ -458,6 +464,9 @@ def reanalysis(
             0, max(0, assimilation_length - rank_start_idx - blanket_id * blanket_stride)
         )
 
+        # [中文注释 | 论文 Eq.(7)] 组装前向算子 𝒜 = ℳ ∘ D_ψ(见 observations.py 的
+        # observator_partial). partial 把 decoder/掩膜/统计量全部绑定成闭包,
+        # 之后 MMPSDenoiser 内部调用 selfA(z) 即得该窗口的预测观测.
         A = partial(
             observator_partial,
             context_fn=context_fn,
@@ -474,10 +483,16 @@ def reanalysis(
 
         del st, era5
 
+        # [中文注释 | 论文 Eq.(6)] ★ 观测注入点: 变量 denoiser 在此被重新绑定 —
+        # 从纯先验 denoiser 变为 MMPS 后验 denoiser. 模型权重不动(此前已冻结),
+        # 这就是"任意观测免重训"的全部动作. iterations=2 对应论文§4.4 的
+        # 2 次 MMPS 迭代(config: mmps_iters).
         denoiser = MMPSDenoiser(
             denoiser, A, y_obs_list, cov_y_list, iterations=diffusion.mmps_iters
         )
 
+    # [中文注释 | 论文§3.2 / Algorithm 2] blanket 化: w=25 小时窗口, 步长 Δ=13
+    # (= w - blanket_overlap 12); symmetrical 模式即取各窗口中段 Δ 拼接回全轨迹.
     denoiser = TrajectoryDenoiser(
         denoiser,
         blanket_size=blanket_size,
@@ -490,6 +505,9 @@ def reanalysis(
 
     denoiser = partial(denoiser, date=timestamps.cuda())
 
+    # [中文注释 | 论文 Eq.(4)/(11)] 反向 SDE 采样: 从纯噪声 z(1)~N(0, Σ(1)) 出发,
+    # 32 步 predictor-corrector(2 次 corrector)积分到 z(0) — 输出即 Eq.(11) 的
+    # 后验轨迹样本 z_{1:L}; 多次采样(num_samples_per_date)即得后验集合.
     @torch.no_grad()
     def sample():
         sampler = select_sampler(diffusion.sampler.type)

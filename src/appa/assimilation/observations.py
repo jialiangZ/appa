@@ -488,6 +488,12 @@ def mask_state(
         cov_y
     """
 
+    # [中文注释 | 论文 Eq.(7) 的 ℳ] 测量函数 ℳ 的实现, 本质是"选取算子":
+    # 从物理场 x(约 200 万个数)中挑出被观测的 (格点, 变量)组合(约几万个数的一维向量):
+    #   - 站点: 固定真实站址(约 1.1 万个), 观测 6 个地表变量(时不变掩膜);
+    #   - 卫星: 极轨扫描的时变可见范围 mask[t], 观测 65 个高空变量.
+    # 造观测 y(作用于 ERA5 真值)与预测观测 y_hat(作用于解码值)调用的是同一个函数,
+    # 因此二者逐元素对齐 — 这是 MMPS 新息 (y - y_hat) 逐元素相减成立的前提.
     obs_list = []
     cov_list = []
 
@@ -539,6 +545,12 @@ def observator_partial(
     Returns:
         y: A tensor of shape :math:`(B, .)` containing the masked observations.
     """
+    # [中文注释 | 论文 Eq.(7) 的 𝒜] 前向算子 𝒜 = ℳ ∘ D_ψ 的实现:
+    #   latent blanket (B, K·N·C) → 反标准化 → autoencoder.decode (D_ψ, 单时刻)
+    #   → 物理场 x_p → mask_fn (ℳ, 按绝对时刻索引对齐时变卫星掩膜) → 各时刻观测拼接.
+    # 它是"携带观测系统上下文的闭包"(所有依赖经 partial 绑定), 必须端到端可微,
+    # 因为 MMPS 要对它做 jvp/vjp. 输入是 denoiser 的输出 x_hat(干净 latent 估计),
+    # 不是带噪的 z_t; 输出与实验脚本构造的 y 排列严格一致.
     blanket = rearrange(
         blanket,
         "B (K N C) -> B K N C",

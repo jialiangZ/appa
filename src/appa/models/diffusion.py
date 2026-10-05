@@ -50,6 +50,11 @@ class Denoiser(nn.Module):
             The denoised tensor :math:`d(x_t)`, with shape :math:`(*, D)`.
         """
 
+        # [中文注释 | 论文§3.2] 不直接学 score, 而是训练 denoiser d(x_t) ≈ E[x|x_t],
+        # 两者经一阶 Tweedie 公式互转: s = (d(x_t) - x_t) / sigma_t^2.
+        # 下面的 EDM 预条件系数保证网络输出直接就是 E[x|x_t]; Appa 全程工作在
+        # denoiser 空间, score 仅在 MMPSDenoiser 与 sampler 内部隐式出现.
+
         c_skip = 1 / (sigma_t**2 + 1)
         c_out = sigma_t / torch.sqrt(sigma_t**2 + 1)
         c_in = 1 / torch.sqrt(sigma_t**2 + 1)
@@ -79,6 +84,16 @@ class MMPSDenoiser(nn.Module):
         iterations: The number of solver iterations.
     """
 
+    # [中文注释 | 公式对照, 论文 arXiv:2504.18720 (Appa)]
+    #   Eq.(6): 后验 score = 先验 score + 似然 score. 本模块在 denoiser 空间隐式实现:
+    #           返回后验 denoiser x_hat + σ_t²·s_obs, sampler 侧按 Tweedie 公式转回
+    #           score 时两项自然相加, 故代码中看不到显式的 score 相加.
+    #   Eq.(7): p(y|z) ≈ N(y; 𝒜(z), Σ_y), 其中 𝒜 = ℳ ∘ D_ψ → 即实验脚本传入的
+    #           self.A (Appa 中为 observations.py 的 observator_partial).
+    #   Eq.(8): MMPS 近似 p(y|z_t) ≈ N(y; 𝒜(E[z|z_t]), Σ_y + J·V[z|z_t]·J^T),
+    #           J 是 𝒜 的 Jacobian (论文原文用符号 A 表示) → 由 forward 内局部
+    #           函数 A/At 以免矩阵的 jvp/vjp 方式实现.
+
     def __init__(
         self,
         denoiser: Denoiser,
@@ -94,6 +109,9 @@ class MMPSDenoiser(nn.Module):
 
         self.A = A
 
+        # [中文注释] y 与 var_y(= Σ_y, 对角)作为 buffer 存入模块: 观测数据从此
+        # "随身携带", sampler 每步调用本模块时无需再传观测. list/nested 版本支持
+        # 每个 blanket 各有自己的观测序列(卫星掩膜随窗口相位变化, 长度 M 可不同).
         if isinstance(y, list):
             self.register_buffer("y", torch.nested.as_nested_tensor(y))
             self.register_buffer("var_y", torch.nested.as_nested_tensor(var_y))
@@ -106,8 +124,13 @@ class MMPSDenoiser(nn.Module):
         self.solve = partial(gmres, iterations=iterations)
 
     def forward(self, x_t: Tensor, sigma_t: Tensor, blanket_id: int = 0, **kwargs):
+        # [中文注释] x_t: 当前带噪 latent blanket (≈ 论文§3.2 的 z_{i:i+w}(t)).
+        # var_t: 假设 p(z)=N(0,I) 时 Var[z|z_t] 的解析式, tweedie_covariance=False 时使用.
         var_t = sigma_t**2 / (1 + sigma_t**2)
 
+        # [中文注释] selfA: 把观测算子 𝒜(Eq.7)钉住当前 blanket_id 后的单参数版本;
+        # 注意与下方局部函数 A(v) 区分 — 那是 𝒜 在 x_hat 处线性化的 Jacobian 作用
+        # 于向量(即 Eq.8 中的 J). selfy/selfvar_y: 本窗口的观测 y 与对角方差 Σ_y.
         selfA = partial(self.A, blanket_id=blanket_id)
         selfy = self.y[blanket_id] if self.y.is_nested else self.y
         selfvar_y = self.var_y[blanket_id] if self.var_y.is_nested else self.var_y
@@ -117,9 +140,12 @@ class MMPSDenoiser(nn.Module):
 
         with torch.enable_grad():
             x_t = x_t.detach().requires_grad_()
-            x_hat = self.denoiser(x_t, sigma_t, **kwargs)
-            y_hat = selfA(x_hat)
+            x_hat = self.denoiser(x_t, sigma_t, **kwargs)  # ① E[z|z_t] — Eq.(8) 的期望项
+            y_hat = selfA(x_hat)  # ② 𝒜(E[z|z_t]) — "当前 latent 猜出来的观测值"
 
+        # [中文注释] 下方 A/At 是 𝒜 在 x_hat 处线性化后的免矩阵 Jacobian 算子:
+        #   A(v)  = J·v   (JVP, 正向): latent 空间方向 → 该方向引起的观测值变化
+        #   At(v) = J^T·v (VJP, 反向): 观测空间向量 → latent 空间向量
         def A(v):
             with (
                 disable_xfa(),
@@ -131,21 +157,32 @@ class MMPSDenoiser(nn.Module):
             return torch.autograd.grad(y_hat, x_hat, v, retain_graph=True)[0]
 
         # fmt: off
+        # [中文注释 | Eq.(8) 的 V[z|z_t]] cov_x: 后验方差作用于向量的免矩阵实现.
         if self.tweedie_covariance:
+            # Tweedie 协方差 σ_t²·∂x_hat/∂x_t: 用 denoiser 自身 Jacobian 估计后验
+            # 方差, 比下面的 N(0,I) 解析式更贴近真实数据先验(MMPS 论文的核心技巧).
             def cov_x(v):
                 return sigma_t**2 * torch.autograd.grad(x_hat, x_t, v, retain_graph=True)[0]
         else:
+            # 退化版本: 直接用解析式 σ_t²/(1+σ_t²) (假设 p(z) = N(0, I)).
             def cov_x(v):
                 return var_t * v
         # fmt: on
 
+        # [中文注释 | Eq.(8) 的协方差整体] cov_y(v) = (Σ_y + J·V[z|z_t]·J^T)·v,
+        # 完全矩阵-free: 对角 Σ_y 逐点乘 + Jacobian 往返传播(At → cov_x → A).
         def cov_y(v):
             return selfvar_y * v + A(cov_x(At(v)))
 
-        grad = selfy - y_hat
+        grad = selfy - y_hat  # ⑤ 新息 y - 𝒜(E[z|z_t]): 观测数据在此参与运算
+        # ⑥ w ≈ Σ_eff^{-1}·新息: GMRES 在 Krylov 子空间内的免矩阵近似解(2 次迭代)
         grad = self.solve(A=cov_y, b=grad)
+        # ⑦ score = J^T·w = ∇_{z_t} log p(y|z_t), 即 Eq.(6) 的第二项(似然 score);
+        # autograd 一次反向 pass 完成 VJP, 成本与观测维数 M、latent 维数 D 的大小无关.
         score = torch.autograd.grad(y_hat, x_t, grad)[0]
 
+        # ⑧ 后验 denoiser: x_hat + σ_t²·s_obs. sampler 侧按 (d - z_t)/σ_t² 转回
+        # score 时, 先验项与似然项自然相加 — 这就是 Eq.(6) 在 denoiser 空间的实现.
         return x_hat + sigma_t**2 * score
 
 
@@ -263,6 +300,11 @@ class TrajectoryDenoiser(nn.Module):
         pass_blanket_ids: Whether to pass the blanket id to the backbone denoiser (e.g., conditioning).
         mode: Mode of trajectory reconstruction from individual windows.
     """
+
+    # [中文注释 | 论文§3.2 / Algorithm 2] 长轨迹的 blanket 分解与重组:
+    # 轨迹按步长 Δ=13(= blanket_size 25 - overlap 12)切成重叠的 w=25 小时窗口,
+    # 每个 blanket 独立过 denoiser(自带各自的观测 y), 再按 symmetrical 模式
+    # 取每个窗口中间 Δ 段拼接回全轨迹 — 对应 Algorithm 2 的 a=(w-Δ)/2, b=a+Δ 截取.
 
     def __init__(
         self,

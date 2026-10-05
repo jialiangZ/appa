@@ -36,6 +36,13 @@ def gmres(
     Returns:
         The :math:`n`-th iteration :math:`x_n`, with shape :math:`(*, D)`.
     """
+    # [中文注释 | MMPS 的 Σ_eff^{-1}] 只用 matvec 解 Σw = b, 从不显式建矩阵:
+    #   1. 在 Krylov 子空间 span{b, Σb, Σ²b, ...} 内找残差 ||Σx - b|| 最小的近似解
+    #      (即把 Σ^{-1}b 近似为 b 的低阶多项式, 每一项只需一次 matvec);
+    #   2. iterations 次 Arnoldi 迭代 = iterations 次 matvec; Appa 用 2 次
+    #      (config: mmps_iters), 因为 Σ_eff 对角占优, Krylov 维度收敛极快;
+    #   3. 内部 float64 保证 Gram-Schmidt 正交化的数值稳定; 不做收敛提前停止
+    #      (避免 GPU→CPU 同步), 且天然支持批量右端项同时求解.
 
     if dtype is None:
         dtype = torch.float64

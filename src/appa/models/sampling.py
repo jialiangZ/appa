@@ -299,6 +299,11 @@ class PCSampler(DDPMSampler):
         self.register_buffer("delta", torch.as_tensor(delta))
 
     def step(self, x_t: Tensor, t: Tensor, s: Tensor, **kwargs) -> Tensor:
+        # [中文注释 | 论文 Eq.(4)] reverse SDE 的离散化, 一步从 t 积分到 s:
+        #   Corrector: Langevin 随机修正(对应 Eq.(4) 的 η>0 随机项), 把 x_t 向
+        #     denoiser 的估计 x_hat 拉动;   Predictor: 确定性(概率流式)更新, 以 x_hat 为锚.
+        #   self.denoiser 可能是 MMPSDenoiser 包装 — 观测信息全部折在 x_hat 里,
+        #   sampler 本身对观测/引导完全无感.
         sigma_s = self.schedule(s)
         sigma_t = self.schedule(t)
 
