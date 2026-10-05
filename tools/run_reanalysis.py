@@ -76,11 +76,15 @@ def main() -> None:
             tmp = window_dir / f"tmp_{i}"
             tmp.mkdir(parents=True, exist_ok=True)
 
-            print(f"[reanalysis {length}h] sample {i + 1}/{len(start_dates) * num_samples}", flush=True)
+            print(
+                f"[reanalysis {length}h] sample {i + 1}/{len(start_dates) * num_samples}",
+                flush=True,
+            )
             job_kwargs = {
                 k: v
                 for k, v in config.items()
-                if k not in ("hardware", "assimilation_lengths", "num_samples_per_date", "start_dates")
+                if k
+                not in ("hardware", "assimilation_lengths", "num_samples_per_date", "start_dates")
             }
             reanalysis(
                 assimilation_length=length,
@@ -103,13 +107,13 @@ def main() -> None:
             shutil.move(str(tmp / "masks.h5"), str(window_dir / f"masks_{i}.h5"))
             shutil.rmtree(tmp)
 
-        trajectories = rearrange(
-            torch.cat(trajectories), "(d s) ... -> d s ...", s=num_samples
-        )
+        trajectories = rearrange(torch.cat(trajectories), "(d s) ... -> d s ...", s=num_samples)
         timestamps = rearrange(torch.cat(timestamps), "(d s) ... -> d s ...", s=num_samples)
         safe_save(trajectories, window_dir / "trajectories.pt")
         safe_save(timestamps, window_dir / "timestamps.pt")
-        print(f"[reanalysis {length}h] saved {tuple(trajectories.shape)} -> {window_dir}", flush=True)
+        print(
+            f"[reanalysis {length}h] saved {tuple(trajectories.shape)} -> {window_dir}", flush=True
+        )
 
 
 if __name__ == "__main__":

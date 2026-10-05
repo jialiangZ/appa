@@ -63,7 +63,9 @@ class StandardizeTransform:
 
         return era5_stats_tensor[:, :, 0], era5_stats_tensor[:, :, 1]
 
-    def __call__(self, state: Tensor, context: Optional[Tensor] = None, inplace: bool = True) -> Tensor:
+    def __call__(
+        self, state: Tensor, context: Optional[Tensor] = None, inplace: bool = True
+    ) -> Tensor:
         r"""Applies standardization to the input tensor.
 
         Args:

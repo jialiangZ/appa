@@ -35,7 +35,12 @@ from appa.data.transforms import StandardizeTransform
 from appa.utils.dates import create_trajectory_timestamps
 from appa.models.diffusion import Denoiser, MMPSDenoiser, TrajectoryDenoiser, create_schedule
 from appa.utils.math import str_to_ids
-from appa.assimilation.observations import create_masks, create_variable_mask, mask_state, observator_partial
+from appa.assimilation.observations import (
+    create_masks,
+    create_variable_mask,
+    mask_state,
+    observator_partial,
+)
 from appa.models.sampling import select_sampler
 from appa.utils.io import load_auto_encoder, load_denoiser, safe_load, safe_save
 

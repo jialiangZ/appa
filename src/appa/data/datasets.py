@@ -168,9 +168,7 @@ class ERA5Dataset(Dataset):
 
         try:
             idx = pd.DatetimeIndex(times)
-            features = np.stack(
-                [idx.year, idx.month, idx.day, idx.hour], axis=-1
-            ).astype(np.int64)
+            features = np.stack([idx.year, idx.month, idx.day, idx.hour], axis=-1).astype(np.int64)
             return torch.from_numpy(features)
         except (TypeError, ValueError):  # e.g. non-standard calendars (cftime)
             return torch.stack([get_date_features(t) for t in times], dim=0)
@@ -210,9 +208,7 @@ class ERA5Dataset(Dataset):
 
         if state.shape[0] < self.trajectory_size:
             # Do not return incomplete trajectories. Can't be batched.
-            raise ValueError(
-                "Incomplete trajectory. Probably wrong dates or trajectory dt value."
-            )
+            raise ValueError("Incomplete trajectory. Probably wrong dates or trajectory dt value.")
 
         return state, context, time
 
@@ -264,9 +260,7 @@ class ERA5Dataset(Dataset):
 
         return tensor
 
-    def _extract_tensors(
-        self, sub_trajectory: xr.Dataset
-    ) -> Tuple[Tensor, Tensor]:
+    def _extract_tensors(self, sub_trajectory: xr.Dataset) -> Tuple[Tensor, Tensor]:
         r"""Extracts the state and context tensors from a trajectory dataset.
 
         Arguments:
@@ -333,7 +327,7 @@ class ERA5Dataset(Dataset):
                 state = torch.nan_to_num(state, nan=DATA_NAN_VALUE)
                 context = torch.nan_to_num(context, nan=DATA_NAN_VALUE)
 
-        time = self._time_features[step_start:step_end:self.trajectory_dt]
+        time = self._time_features[step_start : step_end : self.trajectory_dt]
 
         return state, context, time
 

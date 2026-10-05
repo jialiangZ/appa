@@ -15,7 +15,12 @@ import torch
 from einops import rearrange
 
 from appa.config import PATH_ERA5, PATH_STAT
-from appa.data.const import CONTEXT_VARIABLES, ERA5_PRESSURE_LEVELS, ERA5_SURFACE_VARIABLES, ERA5_VARIABLES
+from appa.data.const import (
+    CONTEXT_VARIABLES,
+    ERA5_PRESSURE_LEVELS,
+    ERA5_SURFACE_VARIABLES,
+    ERA5_VARIABLES,
+)
 from appa.data.datasets import ERA5Dataset
 from appa.data.transforms import StandardizeTransform
 from appa.utils.io import load_auto_encoder, safe_load
@@ -56,9 +61,15 @@ def main():
 
     def truth_hours(start, T):
         ds = ERA5Dataset(
-            PATH_ERA5, start, start,
-            state_variables=ERA5_VARIABLES, context_variables=CONTEXT_VARIABLES,
-            levels=ERA5_PRESSURE_LEVELS, transform=st, trajectory_size=T, cache="none",
+            PATH_ERA5,
+            start,
+            start,
+            state_variables=ERA5_VARIABLES,
+            context_variables=CONTEXT_VARIABLES,
+            levels=ERA5_PRESSURE_LEVELS,
+            transform=st,
+            trajectory_size=T,
+            cache="none",
         )
         y, _, _ = ds[0]
         return rearrange(y, "T Z H W -> T (H W) Z")
@@ -107,7 +118,9 @@ def main():
     print("[reanalysis: assimilation window = trajectory length]")
 
     for L in [1, 2, 4, 8, 16]:
-        traj = safe_load(DENOISER_DIR / "reanalysis" / "local" / f"{L}h" / "trajectories.pt")[0]  # (S, T, N, C)
+        traj = safe_load(DENOISER_DIR / "reanalysis" / "local" / f"{L}h" / "trajectories.pt")[
+            0
+        ]  # (S, T, N, C)
         ts = safe_load(DENOISER_DIR / "reanalysis" / "local" / f"{L}h" / "timestamps.pt")[0, 0]
 
         y = truth_hours(START, L)

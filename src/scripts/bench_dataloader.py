@@ -127,7 +127,9 @@ def main() -> None:
     print(f"{'phase':<24}{'lazy (s)':>12}{'ram (s)':>12}{'speedup':>10}  notes")
     for label, lazy_key, ram_key, note in rows:
         lazy_t, ram_t = timings[lazy_key], timings[ram_key]
-        print(f"{label:<24}{lazy_t:>12.3f}{ram_t:>12.3f}{lazy_t / max(ram_t, 1e-9):>9.1f}x  {note}")
+        print(
+            f"{label:<24}{lazy_t:>12.3f}{ram_t:>12.3f}{lazy_t / max(ram_t, 1e-9):>9.1f}x  {note}"
+        )
 
     lazy_per = timings["lazy_sequential"] / args.samples * 1e3
     ram_per = timings["ram_sequential"] / args.samples * 1e3

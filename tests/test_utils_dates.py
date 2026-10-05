@@ -2,7 +2,11 @@ import math
 import pytest
 import torch
 
-from appa.utils.dates import format_blanket_date, get_local_time_encoding, get_year_progress_encoding
+from appa.utils.dates import (
+    format_blanket_date,
+    get_local_time_encoding,
+    get_year_progress_encoding,
+)
 
 
 @pytest.mark.parametrize(

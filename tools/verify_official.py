@@ -22,8 +22,10 @@ print(f"潜轨迹: {tuple(traj.shape)}  标准化空间 std={traj.std():.3f} mea
 
 # Decode t=0 and t=12 (two moments), in physical units.
 st = StandardizeTransform(
-    PATH_STAT, state_variables=ERA5_VARIABLES,
-    context_variables=CONTEXT_VARIABLES, levels=SUB_PRESSURE_LEVELS,
+    PATH_STAT,
+    state_variables=ERA5_VARIABLES,
+    context_variables=CONTEXT_VARIABLES,
+    levels=SUB_PRESSURE_LEVELS,
 )
 
 # Context: official config has 6 context channels; zeros after standardization = mean value.
@@ -42,8 +44,19 @@ for t in [0, 12, 23]:
     s = st.state_std.reshape(-1)
     x_phys = x * s + m  # (1038240, 71) broadcast
 
-    names = ["2m_temperature", "10m_u_wind", "10m_v_wind", "MSLP", "SST", "precip",
-             "temperature", "u_wind", "v_wind", "geopotential", "specific_humidity"]
+    names = [
+        "2m_temperature",
+        "10m_u_wind",
+        "10m_v_wind",
+        "MSLP",
+        "SST",
+        "precip",
+        "temperature",
+        "u_wind",
+        "v_wind",
+        "geopotential",
+        "specific_humidity",
+    ]
     print(f"\n--- t={t}h 物理量纲检查 (global mean) ---")
     for i, n in enumerate(names):
         if n == "specific_humidity":
